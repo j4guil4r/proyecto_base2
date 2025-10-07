@@ -154,6 +154,23 @@ class SQLTransformer(Transformer):
             "condition": cond,
         }
 
+    def create_index(self, items):
+        idx_type, table, column = str(items[0]).upper(), items[1], items[2]
+        return {
+            "action": "create_index",
+            "table": table,
+            "index_type": idx_type,
+            "column": column
+        }
+
+    def drop_index(self, items):
+        table, column = items[0], items[1]
+        return {
+            "action": "drop_index",
+            "table": table,
+            "column": column
+        }
+
     # ---------- Minor glue ----------
     @v_args(inline=True)
     def number(self, n):

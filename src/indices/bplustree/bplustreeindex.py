@@ -18,17 +18,25 @@ class BPlusTreeIndex(BaseIndex):
         self.tree = BPlusTree.load(self.file_path, order)
         self.tree.order = order
         self.tree.file_path = self.file_path
+        self._dirty = False
 
     def add(self, key: Any, rid: int):
         self.tree.insert(key, rid)
-        self.tree.save()
+        self._dirty = True
+        #self.tree.save()
 
     def search(self, key: Any) -> List[int]:
         return self.tree.search(key)
 
     def remove(self, key: Any, rid: int = None):
         self.tree.remove(key, rid)
-        self.tree.save()
+        self._dirty = True
+        #self.tree.save()
         
     def rangeSearch(self, start_key: Any, end_key: Any) -> List[int]:
         return self.tree.range_search(start_key, end_key)
+    
+    def persist(self):
+        if getattr(self, "_dirty", False):
+            self.tree.save()
+            self._dirty = False

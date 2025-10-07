@@ -1,0 +1,116 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>MiniDB</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 24px; }
+    textarea { width: 100%; height: 120px; }
+    table { border-collapse: collapse; margin-top: 12px; width: 100%; }
+    th, td { border: 1px solid #ddd; padding: 6px 8px; font-size: 14px; }
+    th { background: #fafafa; text-align: left; }
+    .row { display: flex; gap: 16px; align-items: center; }
+  </style>
+</head>
+<body>
+  <h1>MiniDB</h1>
+
+  <div class="row">
+    <form id="uploadForm">
+      <input type="text" name="table" placeholder="Nombre de tabla" required />
+      <input type="file" name="file" accept=".csv" required />
+      <label><input type="checkbox" name="has_header" checked /> CSV con header</label>
+      <button type="submit">Subir CSV</button>
+    </form>
+    <button id="refreshBtn">Listar tablas</button>
+  </div>
+
+  <pre id="tables"></pre>
+
+  <h3>SQL</h3>
+  <textarea id="sql" placeholder='Ej: SELECT * FROM MiTabla WHERE id = 1;'></textarea>
+  <div>
+    <button id="runBtn">Ejecutar</button>
+  </div>
+
+  <div id="out"></div>
+  <script>
+  function show(obj) {
+    return `<pre>${typeof obj === 'string' ? obj : JSON.stringify(obj, null, 2)}</pre>`;
+  }
+  function showError(detail) {
+    document.getElementById('out').innerHTML = `<pre style="color:#b00">${detail}</pre>`;
+  }
+
+  async function runSQL() {
+    const query = document.getElementById('sql').value;
+    const out = document.getElementById('out');
+    try {
+      const res = await fetch('/api/sql', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ query })
+      });
+      let data;
+      try { data = await res.json(); }
+      catch { data = await res.text(); }
+
+      if (!res.ok) return showError(typeof data === 'string' ? data : data.detail || 'Error');
+
+      if (data.rows && data.columns) {
+        const head = `<tr>${data.columns.map(c=>`<th>${c}</th>`).join('')}</tr>`;
+        const body = data.rows.map(r=>`<tr>${r.map(v=>`<td>${v}</td>`).join('')}</tr>`).join('');
+        const idx = data.used_index ? `<p><small>Usó índice: ${data.used_index.type} en ${data.used_index.column}</small></p>` : '';
+        out.innerHTML = idx + `<table>${head}${body}</table>`;
+      } else {
+        out.innerHTML = show(data);
+      }
+    } catch (e) {
+      showError('Network/JS error: ' + e);
+    }
+  }
+
+  async function uploadCSV(e) {
+    e.preventDefault();
+    const form = document.getElementById('uploadForm');
+    const out = document.getElementById('out');
+    const fd = new FormData(form);
+    if (!fd.get('file')) return showError('Elige un .csv antes de subir.');
+    if (!fd.get('has_header')) fd.append('has_header', 'false');
+
+    try {
+      const res = await fetch('/api/upload', { method:'POST', body: fd });
+      let data;
+      try { data = await res.json(); }
+      catch { data = await res.text(); }
+
+      if (!res.ok) return showError(typeof data === 'string' ? data : data.detail || 'Error');
+      out.innerHTML = show(data);
+    } catch (e) {
+      showError('Network/JS error: ' + e);
+    }
+  }
+
+  async function listTables() {
+    try {
+      const res = await fetch('/api/tables');
+      let data;
+      try { data = await res.json(); }
+      catch { data = await res.text(); }
+
+      if (!res.ok) return showError(typeof data === 'string' ? data : data.detail || 'Error');
+      document.getElementById('tables').textContent = JSON.stringify(data, null, 2);
+    } catch (e) {
+      showError('Network/JS error: ' + e);
+    }
+  }
+
+  document.getElementById('runBtn').onclick = runSQL;
+  document.getElementById('uploadForm').onsubmit = uploadCSV;
+  document.getElementById('refreshBtn').onclick = listTables;
+  listTables();
+</script>
+
+
+  </body>
+</html>

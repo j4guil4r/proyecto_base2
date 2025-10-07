@@ -1,4 +1,4 @@
-# src/indices/sequentialfile/sequentilefileindex.py
+# src/indices/sequentialfile/sequentialfileindex.py
 
 import os
 from typing import List, Any

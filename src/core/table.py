@@ -12,6 +12,7 @@ class Table:
         self.data_dir = data_dir
         self.dat_path = os.path.join(data_dir, f"{table_name}.dat")
         self.meta_path = os.path.join(data_dir, f"{table_name}.meta")
+        self.index_specs = []
 
         os.makedirs(self.data_dir, exist_ok=True)
 
@@ -19,6 +20,7 @@ class Table:
             self._load_metadata()
         elif schema:
             self.schema = schema
+            self.index_specs = []
             self._save_metadata()
         else:
             raise ValueError("Se debe proporcionar un esquema para una tabla nueva.")
@@ -27,7 +29,10 @@ class Table:
         self.indexes = {}
 
     def _save_metadata(self):
-        metadata = {'schema': self.schema}
+        metadata = {
+            'schema': self.schema,
+            'indexes': self.index_specs,
+        }
         with open(self.meta_path, 'w') as f:
             json.dump(metadata, f, indent=4)
 
@@ -35,6 +40,7 @@ class Table:
         with open(self.meta_path, 'r') as f:
             metadata = json.load(f)
         self.schema = metadata['schema']
+        self.index_specs = metadata.get('indexes', [])
     
     def insert_record(self, values: List[Any]) -> int:
         packed_data = self.record_manager.pack(values)
