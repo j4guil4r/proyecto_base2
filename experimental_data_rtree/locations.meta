@@ -1,0 +1,22 @@
+{
+    "schema": [
+        [
+            "id",
+            "INT",
+            4
+        ],
+        [
+            "name",
+            "VARCHAR",
+            50
+        ],
+        [
+            "coords",
+            "ARRAY[FLOAT]",
+            16
+        ]
+    ],
+    "index_definitions": {
+        "coords": "RTreeIndex"
+    }
+}
