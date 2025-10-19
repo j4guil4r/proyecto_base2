@@ -39,8 +39,11 @@ class ISAM:
         self.data_capacity = data_capacity
         self.root_offset_l2 = 0
         self.data_page_offsets: List[int] = []
+        self.read_count = 0
+        self.write_count = 0
 
     def _write_block(self, file_key: str, block: Any, offset: int = None) -> int:
+        self.write_count += 1
         data = pickle.dumps(block)
         
         if len(data) > self.BLOCK_SIZE:
@@ -59,6 +62,7 @@ class ISAM:
             return pos
 
     def _read_block(self, file_key: str, offset: int) -> Any:
+        self.read_count += 1
         with open(self.paths[file_key], 'rb') as f:
             f.seek(offset)
             padded_data = f.read(self.BLOCK_SIZE)

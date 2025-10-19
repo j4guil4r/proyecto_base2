@@ -32,6 +32,8 @@ class Directory:
         self.bucket_size = bucket_size
         self.global_depth = 1
         self.bucket_pointers: List[int] = []
+        self.read_count = 0
+        self.write_count = 0
 
     def _hash(self, key: Any) -> int:
         return hash(key)
@@ -41,6 +43,7 @@ class Directory:
         return h & ((1 << self.global_depth) - 1)
 
     def _read_bucket(self, offset: int) -> Bucket:
+        self.read_count += 1
         with open(self.dat_path, 'rb') as f:
             f.seek(offset)
             padded_data = f.read(self.BLOCK_SIZE)
@@ -56,6 +59,7 @@ class Directory:
                 raise e
 
     def _write_bucket(self, bucket: Bucket, offset: int = None) -> int:
+        self.write_count += 1
         data = pickle.dumps(bucket)
         
         if len(data) > self.BLOCK_SIZE:
@@ -139,6 +143,7 @@ class Directory:
         self.global_depth += 1
         
     def save(self):
+        self.write_count += 1
         metadata = {
             'global_depth': self.global_depth,
             'bucket_size': self.bucket_size,

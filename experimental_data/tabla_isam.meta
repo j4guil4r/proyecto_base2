@@ -1,0 +1,17 @@
+{
+    "schema": [
+        [
+            "id",
+            "INT",
+            4
+        ],
+        [
+            "data",
+            "VARCHAR",
+            50
+        ]
+    ],
+    "index_definitions": {
+        "id": "ISAMIndex"
+    }
+}

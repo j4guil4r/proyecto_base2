@@ -6,7 +6,7 @@ from typing import Dict, Any
 
 class SQLParser:
     def __init__(self):
-        
+        # [cite_start]Regex para CREATE TABLE [cite: 34-39]
         self.re_create = re.compile(
             r"CREATE TABLE (\w+)\s*\((.*?)\)", 
             re.IGNORECASE | re.DOTALL
@@ -16,53 +16,53 @@ class SQLParser:
             re.IGNORECASE
         )
         
-        
+        # Regex para INSERT
         self.re_insert = re.compile(
             r"INSERT INTO (\w+) VALUES\s*\((.*?)\)", 
             re.IGNORECASE | re.DOTALL
         )
         
-        
+        # Regex para SELECT
         self.re_select = re.compile(
             r"SELECT \* FROM (\w+)(?:\s+WHERE\s+(.*))?", 
             re.IGNORECASE
         )
         
-        
+        # Regex para DELETE
         self.re_delete = re.compile(
             r"DELETE FROM (\w+) WHERE (.*)", 
             re.IGNORECASE
         )
 
     def parse(self, sql: str) -> Dict[str, Any]:
-        
+        """Punto de entrada principal del parser."""
         sql = sql.strip().rstrip(';')
         
-        
+        # Intentar CREATE
         match = self.re_create.fullmatch(sql)
         if match:
             return self._parse_create(match.group(1), match.group(2))
             
         match = self.re_create_from_file.fullmatch(sql)
         if match:
-            
+            # Esta sintaxis no define un esquema, asumimos que se crea después
             return {
                 'command': 'CREATE_TABLE_FROM_FILE',
                 'table_name': match.group(1),
                 'from_file': match.group(2)
             }
 
-        
+        # Intentar INSERT
         match = self.re_insert.fullmatch(sql)
         if match:
             return self._parse_insert(match.group(1), match.group(2))
 
-        
+        # Intentar SELECT
         match = self.re_select.fullmatch(sql)
         if match:
             return self._parse_select(match.group(1), match.group(2))
             
-        
+        # Intentar DELETE
         match = self.re_delete.fullmatch(sql)
         if match:
             return self._parse_delete(match.group(1), match.group(2))
@@ -70,7 +70,7 @@ class SQLParser:
         raise ValueError(f"Consulta SQL no válida o no soportada: {sql}")
 
     def _parse_create(self, table_name: str, schema_str: str) -> Dict[str, Any]:
-        
+        """Parsea la definición del esquema en CREATE TABLE."""
         plan = {
             'command': 'CREATE_TABLE',
             'table_name': table_name,
@@ -114,24 +114,33 @@ class SQLParser:
         return plan
 
     def _parse_insert(self, table_name: str, values_str: str) -> Dict[str, Any]:
-        """Parsea los valores en INSERT."""
+        """Parsea los valores en INSERT (CORREGIDO)."""
         plan = {
             'command': 'INSERT',
             'table_name': table_name,
             'values': []
         }
         
-        # shlex.split maneja comillas correctamente
+        cleaned_values = [] # Asegura que cleaned_values siempre esté definida
+        
+        # Usar shlex para manejar comillas, luego limpiar
         try:
-            values = shlex.split(values_str, posix=False)
+            # Dividir respetando comillas
+            raw_values = shlex.split(values_str, posix=False)
+            # Limpiar comas al final de cada valor (excepto el último)
+            # y espacios extra al principio/final
+            cleaned_values = [v.strip().rstrip(',') if i < len(raw_values) - 1 else v.strip() 
+                              for i, v in enumerate(raw_values)]
+                              
         except ValueError:
-             # Caso simple si shlex falla (ej. tuplas)
-             values = [v.strip() for v in values_str.split(',')]
+             # Fallback si shlex falla (menos probable ahora)
+             cleaned_values = [v.strip() for v in values_str.split(',')]
 
-        plan['values'] = [self._cast_value(v) for v in values]
+        # Convertir a tipos de Python
+        plan['values'] = [self._cast_value(v) for v in cleaned_values]
         return plan
 
-    def _parse_select(self, table_name: str, where_str: str) -> Dict[str, Any]:
+    def _parse_select(self, table_name: str, where_str: str | None) -> Dict[str, Any]:
         """Parsea la cláusula WHERE."""
         plan = {
             'command': 'SELECT',
@@ -141,7 +150,7 @@ class SQLParser:
         if not where_str:
             return plan # SELECT * FROM table (sin where)
 
-        # 1. BETWEEN 
+        # 1. BETWEEN
         match = re.match(r"(\w+) BETWEEN (.*) AND (.*)", where_str, re.IGNORECASE)
         if match:
             plan['where'] = {
@@ -152,7 +161,7 @@ class SQLParser:
             }
             return plan
             
-        # 2. R-Tree IN (point, radius) 
+        # 2. R-Tree IN (point, radius)
         match = re.match(r"(\w+) IN \(\((.*?)\),\s*(.*?)\)", where_str, re.IGNORECASE)
         if match:
             point = tuple(float(p) for p in match.group(2).split(','))
@@ -164,7 +173,7 @@ class SQLParser:
             }
             return plan
 
-        # 3. Igualdad (=) 
+        # 3. Igualdad (=)
         match = re.match(r"(\w+)\s*=\s*(.*)", where_str, re.IGNORECASE)
         if match:
             plan['where'] = {
@@ -177,7 +186,7 @@ class SQLParser:
         raise ValueError(f"Cláusula WHERE no soportada: {where_str}")
 
     def _parse_delete(self, table_name: str, where_str: str) -> Dict[str, Any]:
-        """Parsea el DELETE (solo soporta igualdad)[cite: 45]."""
+        """Parsea el DELETE (solo soporta igualdad)."""
         match = re.match(r"(\w+)\s*=\s*(.*)", where_str, re.IGNORECASE)
         if not match:
              raise ValueError(f"Cláusula WHERE para DELETE no soportada: {where_str}")
@@ -203,9 +212,11 @@ class SQLParser:
         # 2. Tupla (para RTree)
         if value.startswith('(') and value.endswith(')'):
             try:
-                return tuple(float(p) for p in value.strip('()').split(','))
-            except:
-                pass # Devolver como string si falla
+                # Intenta convertir a tupla de floats
+                return tuple(float(p.strip()) for p in value.strip('()').split(','))
+            except ValueError:
+                # Si falla (ej. ('a', 'b')), devuelve como string
+                 return value
 
         # 3. Float
         try:
